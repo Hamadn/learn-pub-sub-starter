@@ -7,8 +7,6 @@ import (
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"log"
-	"os"
-	"os/signal"
 )
 
 func main() {
@@ -33,8 +31,39 @@ func main() {
 	}
 	fmt.Printf("Queue %v bound to channel %v\n", queue.Name, channel)
 
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	<-signalChan
-	fmt.Println("RabbitMQ connection closed.")
+	gameState := gamelogic.NewGameState(userName)
+
+	for {
+		switch words := gamelogic.GetInput(); words[0] {
+		case "spawn":
+			if words[1] == "" || words[2] == "" {
+				log.Println("Please provide a location and unit type")
+			}
+			err := gameState.CommandSpawn(words)
+			if err != nil {
+				log.Printf("Error spawning unit: %v", err)
+			}
+		case "move":
+			if words[1] == "" || words[2] == "" {
+				log.Println("Please provide a unit ID and location")
+			}
+			_, err := gameState.CommandMove(words)
+			if err != nil {
+				log.Printf("Error moving unit: %v", err)
+				continue
+			}
+		case "status":
+			gameState.CommandStatus()
+		case "help":
+			gamelogic.PrintClientHelp()
+		case "spam":
+			log.Println("Spamming not allowed yet!")
+		case "quit":
+			gamelogic.PrintQuit()
+			return
+		default:
+			fmt.Println("Unknown command. Type 'help' for a list of commands.")
+			continue
+		}
+	}
 }

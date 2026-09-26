@@ -18,18 +18,41 @@ func main() {
 	defer conection.Close()
 	fmt.Println("Connection Successful to RabbitMQ!\n")
 
-	gamelogic.PrintClientHelp()
-
 	channel, err := conection.Channel()
 	if err != nil {
 		log.Fatalf("could not create channel: %v", err)
 	}
 
-	err = pubsub.PublishJSON(channel, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true})
+	gamelogic.PrintServerHelp()
 
-	if err != nil {
-		log.Printf("could not publish: %v", err)
+	for {
+		words := gamelogic.GetInput()
+
+		if len(words) == 0 {
+			continue
+		}
+
+		switch words[0] {
+		case "pause":
+			err = pubsub.PublishJSON(channel, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true})
+
+			if err != nil {
+				log.Printf("could not publish: %v", err)
+			}
+			fmt.Println("Pause message sent!")
+		case "resume":
+			err = pubsub.PublishJSON(channel, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: false})
+
+			if err != nil {
+				log.Printf("could not publish: %v", err)
+			}
+			fmt.Println("Resume message sent!")
+		case "quit":
+			log.Println("Quitting the game...")
+			return
+		default:
+			log.Println("Unknown command")
+		}
+
 	}
-	fmt.Println("Pause message sent!")
-
 }
