@@ -4,13 +4,22 @@ import (
 	"encoding/json"
 	"fmt"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"log"
 )
+
+type AckType int
 
 type SimpleQueueType int
 
 const (
 	Transient SimpleQueueType = iota
 	Durable
+)
+
+const (
+	Ack AckType = iota
+	NackRequeue
+	NackDiscard
 )
 
 func DeclareAndBind(
@@ -26,7 +35,11 @@ func DeclareAndBind(
 		return nil, amqp.Queue{}, fmt.Errorf("could not create channel: %v", err)
 	}
 
-	newQueue, err := channel.QueueDeclare(queueName, queueType == Durable, queueType == Transient, queueType == Transient, false, nil)
+	table := amqp.Table{
+		"x-dead-letter-exchange": "peril_dlx",
+	}
+
+	newQueue, err := channel.QueueDeclare(queueName, queueType == Durable, queueType == Transient, queueType == Transient, false, table)
 	if err != nil {
 		return nil, amqp.Queue{}, fmt.Errorf("could not declare queue: %v", err)
 	}
@@ -45,7 +58,7 @@ func SubscribeJSON[T any](
 	queueName,
 	key string,
 	queueType SimpleQueueType, // an enum to represent "durable" or "transient"
-	handler func(T),
+	handler func(T) AckType,
 ) error {
 
 	channel, queue, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
@@ -68,7 +81,19 @@ func SubscribeJSON[T any](
 				continue
 			}
 			handler(target)
-			msg.Ack(false)
+			switch handler(target) {
+			case Ack:
+				msg.Ack(false)
+				log.Printf("Message acknowledged: %s", msg.Body)
+			case NackRequeue:
+				msg.Nack(false, true)
+				log.Printf("Message negatively acknowledged and requeued: %s", msg.Body)
+			case NackDiscard:
+				msg.Nack(false, false)
+				log.Printf("Message negatively acknowledged and discarded: %s", msg.Body)
+			default:
+				log.Printf("Unknown AckType returned from handler, discarding message: %s", msg.Body)
+			}
 		}
 	}()
 	return nil
