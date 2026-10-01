@@ -1,7 +1,6 @@
 package pubsub
 
 import (
-	"encoding/json"
 	"fmt"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"log"
@@ -52,15 +51,15 @@ func DeclareAndBind(
 	return channel, newQueue, nil
 }
 
-func SubscribeJSON[T any](
+func subscribe[T any](
 	conn *amqp.Connection,
 	exchange,
 	queueName,
 	key string,
-	queueType SimpleQueueType, // an enum to represent "durable" or "transient"
+	queueType SimpleQueueType,
+	decode func([]byte) (T, error),
 	handler func(T) AckType,
 ) error {
-
 	channel, queue, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
 	if err != nil {
 		return fmt.Errorf("could not declare and bind queue: %v", err)
@@ -74,10 +73,10 @@ func SubscribeJSON[T any](
 	go func() {
 		defer channel.Close()
 		for msg := range msgs {
-			var target T
-			err := json.Unmarshal(msg.Body, &target)
+			target, err := decode(msg.Body)
 			if err != nil {
-				fmt.Printf("could not unmarshal message: %v", err)
+				log.Printf("could not decode message: %v", err)
+				msg.Nack(false, false)
 				continue
 			}
 			ackType := handler(target)
@@ -92,9 +91,32 @@ func SubscribeJSON[T any](
 				msg.Nack(false, false)
 				log.Printf("Message negatively acknowledged and discarded: %s", msg.Body)
 			default:
+				msg.Nack(false, false)
 				log.Printf("Unknown AckType returned from handler, discarding message: %s", msg.Body)
 			}
 		}
 	}()
 	return nil
+}
+
+func SubscribeJSON[T any](
+	conn *amqp.Connection,
+	exchange,
+	queueName,
+	key string,
+	queueType SimpleQueueType,
+	handler func(T) AckType,
+) error {
+	return subscribe(conn, exchange, queueName, key, queueType, jsonDecode[T], handler)
+}
+
+func SubscribeGob[T any](
+	conn *amqp.Connection,
+	exchange,
+	queueName,
+	key string,
+	queueType SimpleQueueType,
+	handler func(T) AckType,
+) error {
+	return subscribe(conn, exchange, queueName, key, queueType, gobDecode[T], handler)
 }

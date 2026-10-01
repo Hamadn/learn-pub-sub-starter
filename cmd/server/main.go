@@ -23,11 +23,11 @@ func main() {
 		log.Fatalf("could not create channel: %v", err)
 	}
 
-	channel, queue, err := pubsub.DeclareAndBind(connection, routing.ExchangePerilTopic, routing.GameLogSlug, routing.GameLogSlug+".*", pubsub.Durable)
+	err = pubsub.SubscribeGob(connection, routing.ExchangePerilTopic, routing.GameLogSlug, routing.GameLogSlug+".*", pubsub.Durable, handlerGameLog())
 	if err != nil {
-		log.Fatalf("Could not declare and bind queue %v to channel %v: %v", queue.Name, channel, err)
+		log.Fatalf("error: %v\n", err)
 	}
-	fmt.Printf("Queue %v bound to channel %v\n", queue.Name, channel)
+	fmt.Printf("Queue bound to channel\n")
 
 	gamelogic.PrintServerHelp()
 
@@ -60,5 +60,17 @@ func main() {
 			log.Println("Unknown command")
 		}
 
+	}
+}
+
+func handlerGameLog() func(routing.GameLog) pubsub.AckType {
+	return func(gameLog routing.GameLog) pubsub.AckType {
+		defer fmt.Print("> ")
+		err := gamelogic.WriteLog(gameLog)
+		if err != nil {
+			fmt.Printf("Error writing game log: %v", err)
+			return pubsub.NackDiscard
+		}
+		return pubsub.Ack
 	}
 }
