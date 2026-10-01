@@ -23,7 +23,7 @@ func main() {
 		log.Fatalf("could not create channel: %v", err)
 	}
 
-	channel, queue, err := pubsub.DeclareAndBind(connection, routing.ExchangePerilTopic, routing.GameLogSlug, routing.PauseKey, pubsub.Durable)
+	channel, queue, err := pubsub.DeclareAndBind(connection, routing.ExchangePerilTopic, routing.GameLogSlug, routing.GameLogSlug+".*", pubsub.Durable)
 	if err != nil {
 		log.Fatalf("Could not declare and bind queue %v to channel %v: %v", queue.Name, channel, err)
 	}

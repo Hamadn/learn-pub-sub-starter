@@ -63,12 +63,12 @@ func SubscribeJSON[T any](
 
 	channel, queue, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
 	if err != nil {
-		fmt.Errorf("could not declare and bind queue: %v", err)
+		return fmt.Errorf("could not declare and bind queue: %v", err)
 	}
 
 	msgs, err := channel.Consume(queue.Name, "", false, false, false, false, nil)
 	if err != nil {
-		fmt.Errorf("could not start consuming: %v", err)
+		return fmt.Errorf("could not start consuming: %v", err)
 	}
 
 	go func() {
@@ -80,8 +80,8 @@ func SubscribeJSON[T any](
 				fmt.Printf("could not unmarshal message: %v", err)
 				continue
 			}
-			handler(target)
-			switch handler(target) {
+			ackType := handler(target)
+			switch ackType {
 			case Ack:
 				msg.Ack(false)
 				log.Printf("Message acknowledged: %s", msg.Body)
